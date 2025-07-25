@@ -6,12 +6,13 @@ from telegram.ext import (
     CommandHandler,
     CallbackQueryHandler,
 )
-import requests
+import httpx
 from bs4 import BeautifulSoup
 import datetime
+import asyncio
 
 TOKEN = "7522961870:AAEf9hvKs5gdPlN4q3Cub61v-BFFeyPVNDA"
-CHANNEL_USERNAME = "zri9abet"  # بدون @
+CHANNEL_USERNAME = "zri9abet"
 
 logging.basicConfig(level=logging.INFO)
 
@@ -32,9 +33,10 @@ LEAGUE_MAP = {
     "BUL": "Bulgaria 🇧🇬", "NIR": "N. Ireland 🇬🇧", "MDA": "Moldova 🇲🇩"
 }
 
-def get_predictions():
+async def get_predictions():
     url = "https://bankerpredict.com/5-odds"
-    response = requests.get(url)
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
     soup = BeautifulSoup(response.content, "html.parser")
     rows = soup.find_all("tr")[1:]
 
@@ -81,7 +83,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "yes_first":
         if await is_user_subscribed(context, query.from_user.id):
-            predictions = get_predictions()
+            predictions = await get_predictions()
             await query.edit_message_text(f"✅ توقعات اليوم:\n\n{predictions}")
         else:
             keyboard = [
@@ -94,7 +96,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     elif query.data == "confirm_sub":
         if await is_user_subscribed(context, query.from_user.id):
-            predictions = get_predictions()
+            predictions = await get_predictions()
             await query.edit_message_text(f"✅ توقعات اليوم:\n\n{predictions}")
         else:
             await query.edit_message_text("❌ ما زلت لم تشترك، حاول مرة أخرى بعد الاشتراك.")
