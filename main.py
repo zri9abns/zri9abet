@@ -1,117 +1,116 @@
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+    ApplicationBuilder,
+    ContextTypes,
+    CommandHandler,
+    CallbackQueryHandler,
+)
 import requests
 from bs4 import BeautifulSoup
 import datetime
 
-# 🔐 توكن البوت
-TOKEN = "7508194187:AAGOgYJI_aSywxCsO4gtmCo3NxQLa9XFS8Y"
-CHANNEL_USERNAME = "zri9abet"
+TOKEN = "7522961870:AAEf9hvKs5gdPlN4q3Cub61v-BFFeyPVNDA"
+CHANNEL_USERNAME = "zri9abet"  # بدون @
 
-# إعداد اللوج
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-# 🎯 جلب التوقعات بتنسيق مرتب + الأودز
+# ترجمة رموز الدوريات مع أعلام
+LEAGUE_MAP = {
+    "SWE": "Sweden 🇸🇪", "GER": "Germany 🇩🇪", "ENG": "England 🏴",
+    "SPA": "Spain 🇪🇸", "ITA": "Italy 🇮🇹", "FRA": "France 🇫🇷",
+    "NED": "Netherlands 🇳🇱", "POR": "Portugal 🇵🇹", "BEL": "Belgium 🇧🇪",
+    "NOR": "Norway 🇳🇴", "DEN": "Denmark 🇩🇰", "FIN": "Finland 🇫🇮",
+    "TUR": "Turkey 🇹🇷", "GRE": "Greece 🇬🇷", "MAR": "Morocco 🇲🇦",
+    "KSA": "Saudi Arabia 🇸🇦", "EGY": "Egypt 🇪🇬", "ALG": "Algeria 🇩🇿",
+    "TUN": "Tunisia 🇹🇳", "UAE": "UAE 🇦🇪", "QAT": "Qatar 🇶🇦",
+    "USA": "USA 🇺🇸", "BRA": "Brazil 🇧🇷", "ARG": "Argentina 🇦🇷",
+    "JPN": "Japan 🇯🇵", "CHN": "China 🇨🇳", "KOR": "Korea 🇰🇷",
+    "SUI": "Switzerland 🇨🇭", "CZE": "Czech 🇨🇿", "POL": "Poland 🇵🇱",
+    "SRB": "Serbia 🇷🇸", "CRO": "Croatia 🇭🇷", "IRL": "Ireland 🇮🇪",
+    "LTU": "Lithuania 🇱🇹", "EST": "Estonia 🇪🇪", "KAZ": "Kazakhstan 🇰🇿",
+    "AZE": "Azerbaijan 🇦🇿", "GIB": "Gibraltar 🇬🇮", "ISL": "Iceland 🇮🇸",
+    "BUL": "Bulgaria 🇧🇬", "NIR": "N. Ireland 🇬🇧", "MDA": "Moldova 🇲🇩"
+}
+
+# جلب التوقعات من الموقع
 def get_predictions():
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
-    url = f"https://bankerpredict.com/?dt={today}"
+    url = "https://bankerpredict.com/5-odds"
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, "html.parser")
+    rows = soup.find_all("tr")[1:]
 
+    predictions = ""
+    for row in rows:
+        cells = row.find_all("td")
+        if len(cells) >= 5:
+            time = cells[0].text.strip()
+            league = cells[1].text.strip().upper()
+            match = cells[2].text.strip()
+            tip = cells[3].text.strip()
+            odd = cells[4].text.strip() or "?"
+
+            league_full = LEAGUE_MAP.get(league, league)
+
+            # تصميم الرسالة بالشكل المطلوب
+            predictions += (
+                f"🕓 Time : {time}\n"
+                f"🏆 League : {league_full}\n"
+                f"⚔️ Match : {match}\n"
+                f"🎯 Tip : {tip}\n"
+                f"💸 Odd: {odd}\n"
+                f"━━━━━━━━━━━━━━\n"
+            )
+    return predictions or "❌ لم يتم العثور على توقعات اليوم."
+
+# التحقق من الاشتراك في القناة
+async def is_user_subscribed(context, user_id):
     try:
-        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
-        soup = BeautifulSoup(response.text, "html.parser")
-        rows = soup.find_all("tr")[1:]
-
-        if not rows:
-            return "❌ لم يتم العثور على توقعات اليوم."
-
-        predictions = ""
-        for row in rows:
-            cols = row.find_all("td")
-            if len(cols) >= 5:  # تأكد من وجود odds
-                time = cols[0].text.strip()
-                league = cols[1].text.strip()
-                match = cols[2].text.strip()
-                tip = cols[3].text.strip()
-                odds = cols[4].text.strip()
-
-                predictions += (
-                    f"🕓 {time} | 🏆 {league}\n"
-                    f"⚔️ {match}\n"
-                    f"🎯 التوقع: {tip}\n"
-                    f"💸 الأودز: {odds}\n"
-                    f"━━━━━━━━━━━━━━\n"
-                )
-
-        return predictions.strip()
-
-    except Exception as e:
-        logger.error(f"Error fetching predictions: {e}")
-        return "⚠️ وقعات شي مشكل فالإتصال بالموقع."
-
-# ✅ التحقق من الاشتراك
-async def is_user_subscribed(context: ContextTypes.DEFAULT_TYPE, user_id: int) -> bool:
-    try:
-        member = await context.bot.get_chat_member(chat_id=f"@{CHANNEL_USERNAME}", user_id=user_id)
+        member = await context.bot.get_chat_member(f"@{CHANNEL_USERNAME}", user_id)
         return member.status in ["member", "administrator", "creator"]
-    except Exception as e:
-        logger.warning(f"Subscription check failed: {e}")
+    except Exception:
         return False
 
-# 🚀 أمر /start
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[InlineKeyboardButton("✅ نعم، أريد التوقعات", callback_data="yes_first")]]
     today = datetime.datetime.now().strftime("%A, %d %B %Y")
+    keyboard = [[InlineKeyboardButton("✅ نعم، أريد التوقعات", callback_data="yes_first")]]
     await update.message.reply_text(
-        f"👋🏻 مرحباً بك!\n\n📅 تاريخ اليوم: {today}\nهل ترغب في التوقعات المضمونة؟",
+        f"🙋🏻 مرحباً بك!\n\n✅ هل تريد توقعات اليوم؟\n📅 تاريخ اليوم: {today}",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# ⌨️ التعامل مع الضغط
+# التعامل مع الضغط على الأزرار
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     if query.data == "yes_first":
-        is_sub = await is_user_subscribed(context, query.from_user.id)
-        if is_sub:
+        if await is_user_subscribed(context, query.from_user.id):
             predictions = get_predictions()
-            if len(predictions) > 4000:
-                for i in range(0, len(predictions), 4000):
-                    await query.message.reply_text(predictions[i:i+4000])
-            else:
-                await query.message.reply_text(predictions)
+            # نعدل نفس الرسالة لإظهار التوقعات
+            await query.edit_message_text(f"✅ توقعات اليوم:\n\n{predictions}")
         else:
             keyboard = [
-                [InlineKeyboardButton("📢 إشترك في القناة", url=f"https://t.me/{CHANNEL_USERNAME}")],
-                [InlineKeyboardButton("✅ نعم، إشتركت", callback_data="confirm_sub")]
+                [InlineKeyboardButton("📢 اشترك في القناة", url=f"https://t.me/{CHANNEL_USERNAME}")],
+                [InlineKeyboardButton("✅ نعم، اشتركت", callback_data="confirm_sub")],
             ]
-            await query.message.reply_text(
-                f"❌ خاصك تشترك فالقناة:\nhttps://t.me/{CHANNEL_USERNAME}\n\nمن بعد، اضغط نعم ✅",
+            await query.edit_message_text(
+                f"❌ يجب الاشتراك في القناة:\nhttps://t.me/{CHANNEL_USERNAME}\n\n📌 اشترك أولا ثم اضغط نعم:",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
 
     elif query.data == "confirm_sub":
-        is_sub = await is_user_subscribed(context, query.from_user.id)
-        if is_sub:
+        if await is_user_subscribed(context, query.from_user.id):
             predictions = get_predictions()
-            if len(predictions) > 4000:
-                for i in range(0, len(predictions), 4000):
-                    await query.message.reply_text(predictions[i:i+4000])
-            else:
-                await query.message.reply_text(predictions)
+            await query.edit_message_text(f"✅ توقعات اليوم:\n\n{predictions}")
         else:
-            await query.message.reply_text("❌ مزال ما إشتركتش، جرب من جديد من بعد ما تشترك.")
+            await query.edit_message_text("❌ ما زلت لم تشترك، حاول مرة أخرى بعد الاشتراك.")
 
-# ▶️ تشغيل البوت
-def main():
-    app = Application.builder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button))
+# تشغيل البوت
+app = ApplicationBuilder().token(TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CallbackQueryHandler(button))
 
-    logger.info("✅ Bot is running...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+print("🤖 Bot is running...")
+app.run_polling()
