@@ -5,7 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 import datetime
 
-TOKEN = "7508194187:AAGrDyChNR2Wc6q4wIzSOrmD4baSNfdvJBk"
+TOKEN = "7508194187:AAGOgYJI_aSywxCsO4gtmCo3NxQLa9XFS8Y"
 CHANNEL_USERNAME = "zri9abet"
 
 logging.basicConfig(level=logging.INFO)
